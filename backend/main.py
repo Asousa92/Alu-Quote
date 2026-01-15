@@ -120,7 +120,7 @@ async def list_steel_profiles():
     """List all available steel profiles with costs"""
     if not HAS_COST_DB or cost_db is None:
         raise HTTPException(status_code=503, detail="Cost database not available")
-    
+
     profiles = cost_db.get_all_profiles()
     return {
         "success": True,
@@ -149,9 +149,9 @@ async def list_cladding_items():
     """List all available cladding items with costs"""
     if not HAS_COST_DB or cost_db is None:
         raise HTTPException(status_code=503, detail="Cost database not available")
-    
+
     all_cladding = cost_db.get_all_cladding()
-    
+
     def format_items(items):
         return [
             {
@@ -168,7 +168,7 @@ async def list_cladding_items():
             }
             for item in items
         ]
-    
+
     return {
         "success": True,
         "facade": format_items(all_cladding["facade"]),
@@ -184,16 +184,16 @@ async def calculate_costs(items: List[Dict[str, Any]]):
     """
     if not HAS_COST_DB or cost_db is None:
         raise HTTPException(status_code=503, detail="Cost database not available")
-    
+
     results = []
     total_cost = 0
     total_weight = 0
-    
+
     for item in items:
         item_type = item.get("type", "profile")
         name = item.get("name", "")
         quantity = float(item.get("quantity", 0))
-        
+
         if item_type == "profile":
             profile = cost_db.find_profile(name)
             if profile and quantity > 0:
@@ -238,7 +238,7 @@ async def calculate_costs(items: List[Dict[str, Any]]):
                     "total_cost": cost_data["total_cost"]
                 })
                 total_cost += cost_data["total_cost"]
-    
+
     return {
         "success": True,
         "items": results,
@@ -254,9 +254,9 @@ async def search_costs(search_term: str):
     """Search for profiles or cladding items by name"""
     if not HAS_COST_DB or cost_db is None:
         raise HTTPException(status_code=503, detail="Cost database not available")
-    
+
     results = []
-    
+
     # Search profiles
     profile = cost_db.find_profile(search_term)
     if profile:
@@ -266,7 +266,7 @@ async def search_costs(search_term: str):
             "weight_per_meter": profile.weight_per_meter,
             "area_per_meter": profile.area_per_meter
         })
-    
+
     # Search cladding
     cladding = cost_db.find_cladding(search_term)
     if cladding:
@@ -276,7 +276,7 @@ async def search_costs(search_term: str):
             "unit": cladding.unit,
             "total_price_per_unit": cladding.total_price_per_unit
         })
-    
+
     return {
         "success": True,
         "search_term": search_term,
@@ -290,7 +290,7 @@ async def search_costs(search_term: str):
 async def create_project(project: ProjectCreate):
     """Create a new budgeting project"""
     project_id = str(uuid.uuid4())[:8]
-    
+
     projects_db[project_id] = {
         "id": project_id,
         "name": project.name,
@@ -304,7 +304,7 @@ async def create_project(project: ProjectCreate):
         "budget": None,
         "status": "created"
     }
-    
+
     return projects_db[project_id]
 
 @app.get("/api/projects")
@@ -324,7 +324,7 @@ async def delete_project(project_id: str):
     """Delete a project"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     del projects_db[project_id]
     return {"message": "Project deleted", "id": project_id}
 
@@ -342,14 +342,14 @@ async def upload_files(
     """
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
     results = []
-    
+
     for file in files:
         file_id = str(uuid.uuid4())[:8]
         file_ext = Path(file.filename).suffix.lower()
-        
+
         # Validate file type
         if file_ext not in ['.dxf', '.pdf', '.dwg']:
             results.append({
@@ -358,7 +358,7 @@ async def upload_files(
                 "error": "Tipo de ficheiro não suportado. Apenas .dxf, .dwg e .pdf são aceites."
             })
             continue
-        
+
         # Handle DWG files (AutoCAD native format)
         if file_ext == '.dwg':
             results.append({
@@ -375,15 +375,15 @@ async def upload_files(
                 }
             })
             continue
-        
+
         # Save file
         file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
-        
+
         try:
             content = await file.read()
             with open(file_path, "wb") as f:
                 f.write(content)
-            
+
             # Process based on file type
             if file_ext == '.dxf':
                 analysis = process_dxf_exhaustive(str(file_path))
@@ -395,7 +395,7 @@ async def upload_files(
                 file_type = "pdf"
                 category = categorize_pdf(analysis)
                 project["pdf_analyses"].append(analysis)
-            
+
             # Store file info
             file_info = {
                 "id": file_id,
@@ -408,10 +408,10 @@ async def upload_files(
                 "analysis_success": analysis.get("success", False),
                 "analysis": analysis
             }
-            
+
             files_db[file_id] = file_info
             project["files"].append(file_info)
-            
+
             results.append({
                 "file_id": file_id,
                 "filename": file.filename,
@@ -421,19 +421,19 @@ async def upload_files(
                 "analysis_summary": get_analysis_summary(analysis, file_type),
                 "error": analysis.get("error") if not analysis.get("success") else None
             })
-            
+
         except Exception as e:
             results.append({
                 "filename": file.filename,
                 "status": "error",
                 "error": str(e)
             })
-    
+
     # Merge analyses after all files are processed
     merge_project_analyses(project)
-    
+
     project["status"] = "files_uploaded"
-    
+
     return {
         "project_id": project_id,
         "files_processed": len(results),
@@ -459,7 +459,7 @@ def process_pdf_exhaustive(file_path: str) -> dict:
 
 def merge_project_analyses(project: Dict):
     """Merge multiple DXF and PDF analyses into unified views"""
-    
+
     # Merge DXF analyses
     if project["dxf_analyses"]:
         merged_dxf = {
@@ -474,35 +474,35 @@ def merge_project_analyses(project: Dict):
             "total_features": 0,
             "files_merged": len(project["dxf_analyses"])
         }
-        
+
         for analysis in project["dxf_analyses"]:
             if analysis.get("success"):
                 # Merge profiles
                 for profile in analysis.get("profiles", []):
                     profile["source_file"] = analysis.get("file_info", {}).get("filename", "")
                     merged_dxf["profiles"].append(profile)
-                
+
                 # Merge features
                 for ftype, count in analysis.get("features_summary", {}).items():
                     merged_dxf["features_summary"][ftype] = merged_dxf["features_summary"].get(ftype, 0) + count
-                
+
                 # Merge material quantities
                 merged_dxf["material_quantities"].extend(analysis.get("material_quantities", []))
-                
+
                 # Merge texts
                 merged_dxf["texts_extracted"].extend(analysis.get("texts_extracted", []))
-                
+
                 # Merge layers
                 merged_dxf["layers"].update(analysis.get("layers", {}))
-                
+
                 # Merge blocks
                 merged_dxf["blocks_analyzed"].update(analysis.get("blocks_analyzed", {}))
-        
+
         merged_dxf["total_profiles"] = len(merged_dxf["profiles"])
         merged_dxf["total_features"] = sum(merged_dxf["features_summary"].values())
-        
+
         project["merged_dxf_analysis"] = merged_dxf
-    
+
     # Merge PDF analyses
     if project["pdf_analyses"]:
         merged_pdf = {
@@ -516,30 +516,30 @@ def merge_project_analyses(project: Dict):
             "total_constraints": 0,
             "files_merged": len(project["pdf_analyses"])
         }
-        
+
         for analysis in project["pdf_analyses"]:
             if analysis.get("success"):
                 # Merge BOM items
                 for item in analysis.get("bom_items", []):
                     item["source_file"] = analysis.get("document_info", {}).get("filename", "")
                     merged_pdf["bom_items"].append(item)
-                
+
                 # Merge constraints
                 for constraint in analysis.get("constraints", []):
                     constraint["source_file"] = analysis.get("document_info", {}).get("filename", "")
                     merged_pdf["constraints"].append(constraint)
-                
+
                 # Merge specs
                 merged_pdf["dimension_specs"].extend(analysis.get("dimension_specs", []))
                 merged_pdf["material_specs"].extend(analysis.get("material_specs", []))
                 merged_pdf["profile_references"].extend(analysis.get("profile_references", []))
-        
+
         # Deduplicate profile references
         merged_pdf["profile_references"] = list(set(merged_pdf["profile_references"]))
-        
+
         merged_pdf["total_items"] = len(merged_pdf["bom_items"])
         merged_pdf["total_constraints"] = len(merged_pdf["constraints"])
-        
+
         project["merged_pdf_analysis"] = merged_pdf
 
 
@@ -547,12 +547,12 @@ def categorize_dxf(analysis: dict) -> str:
     """Categorize DXF file based on content"""
     if not analysis.get("success"):
         return "error"
-    
+
     stats = analysis.get("statistics", {})
     profiles = stats.get("total_profiles", 0)
     features = stats.get("total_features", 0)
     texts = stats.get("total_texts", 0)
-    
+
     if profiles > 50:
         return "floor_plan"
     elif features > 10:
@@ -568,11 +568,11 @@ def categorize_pdf(analysis: dict) -> str:
     """Categorize PDF file based on content"""
     if not analysis.get("success"):
         return "error"
-    
+
     stats = analysis.get("statistics", {})
     bom_items = stats.get("total_items", 0)
     constraints = stats.get("total_constraints", 0)
-    
+
     if bom_items > 5:
         return "bill_of_materials"
     elif constraints > 10:
@@ -586,7 +586,7 @@ def get_analysis_summary(analysis: dict, file_type: str) -> dict:
     """Get brief summary of analysis results"""
     if not analysis.get("success"):
         return {"error": analysis.get("error", "Análise falhou")}
-    
+
     if file_type == "dxf":
         stats = analysis.get("statistics", {})
         return {
@@ -621,9 +621,9 @@ async def get_dxf_analysis(project_id: str):
     """Get merged DXF analysis for a project"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
-    
+
     if project["merged_dxf_analysis"]:
         return project["merged_dxf_analysis"]
     elif project["dxf_analyses"]:
@@ -637,9 +637,9 @@ async def get_pdf_analysis(project_id: str):
     """Get merged PDF analysis for a project"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
-    
+
     if project["merged_pdf_analysis"]:
         return project["merged_pdf_analysis"]
     elif project["pdf_analyses"]:
@@ -653,9 +653,9 @@ async def get_all_analyses(project_id: str):
     """Get all individual analyses for a project"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
-    
+
     return {
         "dxf_analyses": project["dxf_analyses"],
         "pdf_analyses": project["pdf_analyses"],
@@ -673,18 +673,18 @@ async def get_dxf_preview(project_id: str):
     """Get SVG preview of DXF file"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
     dxf_files = [f for f in project.get("files", []) if f["type"] == "dxf"]
-    
+
     if not dxf_files:
         raise HTTPException(status_code=404, detail="Nenhum ficheiro DXF no projeto")
-    
+
     # Generate SVG preview from first DXF
     parser = DXFParser(dxf_files[0]["path"])
     parser.parse()
     svg = parser.get_svg_preview()
-    
+
     return {"svg": svg, "file": dxf_files[0]["filename"]}
 
 
@@ -698,9 +698,9 @@ async def calculate_budget(request: BudgetRequest):
     """
     if request.project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[request.project_id]
-    
+
     # Use merged analyses
     dxf_analysis = project.get("merged_dxf_analysis") or (
         project["dxf_analyses"][0] if project["dxf_analyses"] else {"success": False}
@@ -708,36 +708,36 @@ async def calculate_budget(request: BudgetRequest):
     pdf_analysis = project.get("merged_pdf_analysis") or (
         project["pdf_analyses"][0] if project["pdf_analyses"] else {"success": False}
     )
-    
+
     has_dxf = dxf_analysis.get("success", False)
     has_pdf = pdf_analysis.get("success", False)
-    
+
     if not has_dxf and not has_pdf:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Nenhum dado de análise disponível. Por favor carregue ficheiros primeiro."
         )
-    
+
     # Create pricing parameters
     params = PricingParameters()
     if request.parameters:
         for key, value in request.parameters.model_dump(exclude_none=True).items():
             if hasattr(params, key):
                 setattr(params, key, value)
-    
+
     # Calculate budget
     calculator = BudgetCalculator(params)
-    
+
     budget = calculator.calculate_budget(
         dxf_data=dxf_analysis,
         pdf_data=pdf_analysis,
         surface_treatment=request.surface_treatment,
         project_name=project["name"]
     )
-    
+
     # Add AI recommendations
     budget["recommendations"] = calculator.get_ai_recommendations()
-    
+
     # Add source information
     budget["data_sources"] = {
         "dxf_files_used": len(project["dxf_analyses"]),
@@ -745,11 +745,11 @@ async def calculate_budget(request: BudgetRequest):
         "quantity_source": "DXF" if has_dxf else "PDF",
         "specifications_source": "PDF" if has_pdf else "DXF"
     }
-    
+
     # Store budget in project
     project["budget"] = budget
     project["status"] = "calculated"
-    
+
     return budget
 
 
@@ -768,19 +768,19 @@ async def simulate_margin(project_id: str, target_margin_pct: float = 25.0):
     """Simulate different profit margins"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
     budget = project.get("budget")
-    
+
     if not budget:
         raise HTTPException(status_code=400, detail="Nenhum orçamento calculado ainda")
-    
+
     summary = budget.get("summary", {})
     subtotal = summary.get("totals", {}).get("subtotal", 0)
-    
+
     new_margin = subtotal * (target_margin_pct / 100)
     new_total = subtotal + new_margin
-    
+
     return {
         "original_margin_pct": summary.get("metrics", {}).get("profit_margin_pct", 20),
         "target_margin_pct": target_margin_pct,
@@ -797,18 +797,18 @@ async def export_json(project_id: str):
     """Export budget as JSON"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
     budget = project.get("budget")
-    
+
     if not budget:
         raise HTTPException(status_code=400, detail="Nenhum orçamento para exportar")
-    
+
     export_path = EXPORT_DIR / f"quote_{project_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    
+
     with open(export_path, "w", encoding="utf-8") as f:
         json.dump(budget, f, indent=2, ensure_ascii=False)
-    
+
     return FileResponse(
         path=export_path,
         filename=export_path.name,
@@ -821,16 +821,16 @@ async def export_pdf(project_id: str):
     """Export budget as professional PDF document"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
     budget = project.get("budget")
-    
+
     if not budget:
         raise HTTPException(status_code=400, detail="Nenhum orçamento para exportar")
-    
+
     # Create PDF
     export_path = EXPORT_DIR / f"orcamento_{project_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    
+
     doc = SimpleDocTemplate(
         str(export_path),
         pagesize=A4,
@@ -839,7 +839,7 @@ async def export_pdf(project_id: str):
         topMargin=15*mm,
         bottomMargin=15*mm
     )
-    
+
     # Styles
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -871,13 +871,13 @@ async def export_pdf(project_id: str):
         parent=styles['Normal'],
         fontSize=9
     )
-    
+
     elements = []
-    
+
     # Header
     elements.append(Paragraph("AluQuote AI", title_style))
     elements.append(Paragraph("Orçamento de Serralharia de Alumínio", subtitle_style))
-    
+
     # Project Info
     summary = budget.get("summary", {})
     project_info = [
@@ -885,7 +885,7 @@ async def export_pdf(project_id: str):
         ["Data:", datetime.now().strftime("%d/%m/%Y %H:%M")],
         ["Referência:", f"ORÇ-{project_id.upper()}"]
     ]
-    
+
     info_table = Table(project_info, colWidths=[80, 300])
     info_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
@@ -896,14 +896,14 @@ async def export_pdf(project_id: str):
     ]))
     elements.append(info_table)
     elements.append(Spacer(1, 15))
-    
+
     # Summary Stats
     elements.append(Paragraph("Resumo do Orçamento", section_style))
-    
+
     quantities = summary.get("quantities", {})
     totals = summary.get("totals", {})
     metrics = summary.get("metrics", {})
-    
+
     summary_data = [
         ["Descrição", "Valor"],
         ["Total de Perfis", str(quantities.get("total_profiles", 0))],
@@ -912,7 +912,7 @@ async def export_pdf(project_id: str):
         ["Horas de Produção", f"{metrics.get('production_hours', 0):.1f}h"],
         ["Fator de Desperdício", f"{metrics.get('waste_percentage', 0):.1f}%"],
     ]
-    
+
     summary_table = Table(summary_data, colWidths=[250, 150])
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0ea5e9')),
@@ -928,15 +928,15 @@ async def export_pdf(project_id: str):
     ]))
     elements.append(summary_table)
     elements.append(Spacer(1, 15))
-    
+
     # Line Items
     elements.append(Paragraph("Itens do Orçamento", section_style))
-    
+
     line_items = budget.get("line_items", [])
-    
+
     items_header = ["#", "Referência", "Descrição", "Qtd", "Peso(kg)", "Material", "Tratam.", "M.O.", "Total"]
     items_data = [items_header]
-    
+
     for item in line_items:
         costs = item.get("costs", {})
         geometry = item.get("geometry", {})
@@ -952,7 +952,7 @@ async def export_pdf(project_id: str):
             f"{item.get('total_cost', 0):.2f}"
         ]
         items_data.append(row)
-    
+
     items_table = Table(items_data, colWidths=[20, 55, 80, 25, 40, 45, 40, 35, 45])
     items_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
@@ -968,13 +968,13 @@ async def export_pdf(project_id: str):
     ]))
     elements.append(items_table)
     elements.append(Spacer(1, 15))
-    
+
     # Cost Breakdown
     elements.append(Paragraph("Decomposição de Custos", section_style))
-    
+
     cost_breakdown = summary.get("cost_breakdown", {})
     breakdown_data = [["Categoria", "Valor (EUR)"]]
-    
+
     cost_labels = {
         "raw_material": "Matéria-Prima",
         "transformation": "Transformação",
@@ -984,11 +984,11 @@ async def export_pdf(project_id: str):
         "waste_allowance": "Provisão Desperdício",
         "overhead": "Custos Gerais"
     }
-    
+
     for key, value in cost_breakdown.items():
         label = cost_labels.get(key, key.replace("_", " ").title())
         breakdown_data.append([label, f"{value:.2f} €"])
-    
+
     breakdown_table = Table(breakdown_data, colWidths=[250, 150])
     breakdown_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#059669')),
@@ -1003,14 +1003,14 @@ async def export_pdf(project_id: str):
     ]))
     elements.append(breakdown_table)
     elements.append(Spacer(1, 20))
-    
+
     # Totals
     totals_data = [
         ["Subtotal:", f"{totals.get('subtotal', 0):.2f} €"],
         ["Margem de Lucro:", f"{totals.get('profit_margin', 0):.2f} €"],
         ["TOTAL ORÇAMENTO:", f"{totals.get('total_quote', 0):.2f} €"],
     ]
-    
+
     totals_table = Table(totals_data, colWidths=[300, 100])
     totals_table.setStyle(TableStyle([
         ('FONTSIZE', (0, 0), (-1, -1), 11),
@@ -1024,7 +1024,7 @@ async def export_pdf(project_id: str):
     ]))
     elements.append(totals_table)
     elements.append(Spacer(1, 30))
-    
+
     # Footer
     footer_style = ParagraphStyle(
         'Footer',
@@ -1035,10 +1035,10 @@ async def export_pdf(project_id: str):
     )
     elements.append(Paragraph("Orçamento gerado automaticamente por AluQuote AI | Válido por 30 dias", footer_style))
     elements.append(Paragraph(f"Documento: ORÇ-{project_id.upper()} | {datetime.now().strftime('%d/%m/%Y')}", footer_style))
-    
+
     # Build PDF
     doc.build(elements)
-    
+
     return FileResponse(
         path=export_path,
         filename=f"orcamento_{project_id}.pdf",
@@ -1051,22 +1051,22 @@ async def export_csv(project_id: str):
     """Export budget line items as CSV"""
     if project_id not in projects_db:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     project = projects_db[project_id]
     budget = project.get("budget")
-    
+
     if not budget:
         raise HTTPException(status_code=400, detail="Nenhum orçamento para exportar")
-    
+
     import csv
-    
+
     export_path = EXPORT_DIR / f"quote_{project_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
+
     line_items = budget.get("line_items", [])
-    
+
     with open(export_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        
+
         # Header
         writer.writerow([
             "Linha", "Referência", "Descrição", "Qtd", "Fonte Qtd",
@@ -1074,7 +1074,7 @@ async def export_csv(project_id: str):
             "Custo Material", "Custo Tratamento", "Custo M.O.",
             "Custo Unitário", "Custo Total", "Confiança"
         ])
-        
+
         # Data rows
         for item in line_items:
             geometry = item.get("geometry", {})
@@ -1095,7 +1095,7 @@ async def export_csv(project_id: str):
                 item["total_cost"],
                 item.get("correlation_confidence", 0)
             ])
-    
+
     return FileResponse(
         path=export_path,
         filename=export_path.name,
